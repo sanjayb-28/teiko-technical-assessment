@@ -2,6 +2,12 @@
 
 Analysis of immune-cell population data using Python, SQLite, and an interactive Streamlit dashboard.
 
+## Setup
+
+```bash
+python -m pip install -r requirements.txt
+```
+
 ## Data management
 
 Run the loader from the repository root:
@@ -41,6 +47,19 @@ python analysis.py
 ```
 
 The command writes `outputs/cell_frequencies.csv`. Each sample has five rows with the required `sample`, `total_count`, `population`, `count`, and `percentage` columns. Percentages are calculated as the population count divided by the sample's total cell count, multiplied by 100.
+
+## Statistical analysis
+
+`python analysis.py` also compares relative frequencies for melanoma PBMC samples from miraclib-treated responders and non-responders. A two-sided Welch t-test is run for each cell population with significance defined as `p < 0.05`.
+
+The analysis creates:
+
+- `outputs/statistical_results.csv`
+- `outputs/responder_boxplots.png`
+
+CD4 T cells show a significant difference between responders and non-responders (`p = 0.0050`). The other four populations do not meet the `p < 0.05` threshold.
+
+The results table includes group sizes, mean percentages, mean differences, test statistics, p-values, and significance. The source contains repeated samples for each subject at days 0, 7, and 14; this analysis follows the assessment's requested sample-level comparison and should be interpreted as an association rather than an independent predictive model.
 
 ## Development tools
 
