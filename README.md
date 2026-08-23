@@ -4,6 +4,8 @@ Analysis of immune-cell population data using Python, SQLite, and an interactive
 
 ## Setup
 
+Python 3.10 or newer is required.
+
 ```bash
 python -m pip install -r requirements.txt
 ```
