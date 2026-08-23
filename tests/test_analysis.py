@@ -123,8 +123,8 @@ class ResponderAnalysisTests(unittest.TestCase):
 
         self.assertEqual(set(frequencies), set(POPULATIONS))
         for population in POPULATIONS:
-            self.assertEqual(len(frequencies[population]["yes"]), 993)
-            self.assertEqual(len(frequencies[population]["no"]), 975)
+            self.assertEqual(len(frequencies[population]["yes"]), 331)
+            self.assertEqual(len(frequencies[population]["no"]), 325)
 
     def test_writes_statistics_and_boxplots(self) -> None:
         results = run_responder_analysis(
@@ -144,8 +144,15 @@ class ResponderAnalysisTests(unittest.TestCase):
             {row["population"] for row in rows if row["significant"] == "yes"},
             {"cd4_t_cell"},
         )
-        self.assertTrue(all(row["responder_n"] == "993" for row in rows))
-        self.assertTrue(all(row["non_responder_n"] == "975" for row in rows))
+        self.assertTrue(all(row["responder_subject_n"] == "331" for row in rows))
+        self.assertTrue(
+            all(row["non_responder_subject_n"] == "325" for row in rows)
+        )
+        cd4_result = next(row for row in rows if row["population"] == "cd4_t_cell")
+        self.assertAlmostEqual(float(cd4_result["p_value"]), 0.0045149775)
+        self.assertAlmostEqual(
+            float(cd4_result["adjusted_p_value"]), 0.0225748875
+        )
 
         image = self.boxplot_path.read_bytes()
         self.assertEqual(image[:8], b"\x89PNG\r\n\x1a\n")

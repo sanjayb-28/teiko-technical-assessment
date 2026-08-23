@@ -50,16 +50,16 @@ The command writes `outputs/cell_frequencies.csv`. Each sample has five rows wit
 
 ## Statistical analysis
 
-`python analysis.py` also compares relative frequencies for melanoma PBMC samples from miraclib-treated responders and non-responders. A two-sided Welch t-test is run for each cell population with significance defined as `p < 0.05`.
+`python analysis.py` also compares relative frequencies for melanoma PBMC samples from miraclib-treated responders and non-responders. Each subject's percentages are averaged across days 0, 7, and 14 before running a two-sided Welch t-test for each population. Benjamini–Hochberg correction controls the false discovery rate across the five tests, with significance defined as adjusted `p < 0.05`.
 
 The analysis creates:
 
 - `outputs/statistical_results.csv`
 - `outputs/responder_boxplots.png`
 
-CD4 T cells show a significant difference between responders and non-responders (`p = 0.0050`). The other four populations do not meet the `p < 0.05` threshold.
+CD4 T cells show a significant difference between responders and non-responders (raw `p = 0.0045`, adjusted `p = 0.0226`). The other four populations do not meet the adjusted `p < 0.05` threshold.
 
-The results table includes group sizes, mean percentages, mean differences, test statistics, p-values, and significance. The source contains repeated samples for each subject at days 0, 7, and 14; this analysis follows the assessment's requested sample-level comparison and should be interpreted as an association rather than an independent predictive model.
+The results table includes subject counts, mean percentages, mean differences, test statistics, raw and adjusted p-values, and significance. The analysis identifies associations with response; it does not train or validate a predictive model.
 
 ## Development tools
 

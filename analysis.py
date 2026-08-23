@@ -5,12 +5,13 @@ from __future__ import annotations
 import csv
 import os
 import sqlite3
+from collections import defaultdict
 from contextlib import closing
 from pathlib import Path
 
 import matplotlib
 import numpy as np
-from scipy.stats import ttest_ind
+from scipy.stats import false_discovery_control, ttest_ind
 
 from load_data import POPULATIONS
 
@@ -35,13 +36,14 @@ OUTPUT_COLUMNS = (
 
 STATISTICS_COLUMNS = (
     "population",
-    "responder_n",
-    "non_responder_n",
+    "responder_subject_n",
+    "non_responder_subject_n",
     "responder_mean_percentage",
     "non_responder_mean_percentage",
     "mean_difference",
     "t_statistic",
     "p_value",
+    "adjusted_p_value",
     "significant",
 )
 
@@ -68,12 +70,15 @@ FREQUENCY_QUERY = """
 
 RESPONDER_QUERY = """
     SELECT
+        projects.project_name,
+        subjects.subject_name,
         frequencies.population,
         subjects.response,
         frequencies.percentage
     FROM sample_cell_frequencies AS frequencies
     JOIN samples ON samples.sample_name = frequencies.sample
     JOIN subjects USING (subject_id)
+    JOIN projects USING (project_id)
     WHERE subjects.condition = 'melanoma'
       AND subjects.treatment = 'miraclib'
       AND samples.sample_type = 'PBMC'
@@ -147,9 +152,19 @@ def load_responder_frequencies(
     frequencies = {
         population: {"no": [], "yes": []} for population in POPULATIONS
     }
+    subject_measurements: dict[tuple[str, str, str, str], list[float]] = defaultdict(
+        list
+    )
     with closing(sqlite3.connect(database_path)) as connection:
-        for population, response, percentage in connection.execute(RESPONDER_QUERY):
-            frequencies[population][response].append(float(percentage))
+        for project, subject, population, response, percentage in connection.execute(
+            RESPONDER_QUERY
+        ):
+            subject_measurements[(population, response, project, subject)].append(
+                float(percentage)
+            )
+
+    for (population, response, _, _), percentages in subject_measurements.items():
+        frequencies[population][response].append(float(np.mean(percentages)))
 
     for population, groups in frequencies.items():
         if not groups["yes"] or not groups["no"]:
@@ -178,16 +193,23 @@ def calculate_responder_statistics(
         results.append(
             {
                 "population": population,
-                "responder_n": len(responders),
-                "non_responder_n": len(non_responders),
+                "responder_subject_n": len(responders),
+                "non_responder_subject_n": len(non_responders),
                 "responder_mean_percentage": responder_mean,
                 "non_responder_mean_percentage": non_responder_mean,
                 "mean_difference": responder_mean - non_responder_mean,
                 "t_statistic": float(test_result.statistic),
                 "p_value": p_value,
-                "significant": p_value < 0.05,
             }
         )
+
+    adjusted_p_values = false_discovery_control(
+        [float(result["p_value"]) for result in results],
+        method="bh",
+    )
+    for result, adjusted_p_value in zip(results, adjusted_p_values, strict=True):
+        result["adjusted_p_value"] = float(adjusted_p_value)
+        result["significant"] = adjusted_p_value < 0.05
     return results
 
 
@@ -211,8 +233,10 @@ def write_statistical_results(
                 writer.writerow(
                     {
                         "population": result["population"],
-                        "responder_n": result["responder_n"],
-                        "non_responder_n": result["non_responder_n"],
+                        "responder_subject_n": result["responder_subject_n"],
+                        "non_responder_subject_n": result[
+                            "non_responder_subject_n"
+                        ],
                         "responder_mean_percentage": (
                             f"{result['responder_mean_percentage']:.6f}"
                         ),
@@ -222,6 +246,7 @@ def write_statistical_results(
                         "mean_difference": f"{result['mean_difference']:.6f}",
                         "t_statistic": f"{result['t_statistic']:.6f}",
                         "p_value": f"{result['p_value']:.10f}",
+                        "adjusted_p_value": f"{result['adjusted_p_value']:.10f}",
                         "significant": "yes" if result["significant"] else "no",
                     }
                 )
@@ -330,8 +355,8 @@ def create_responder_boxplot(
                     )
 
                 result = result_by_population[population]
-                p_value = float(result["p_value"])
-                p_text = f"p = {p_value:.3g}"
+                adjusted_p_value = float(result["adjusted_p_value"])
+                p_text = f"adjusted p = {adjusted_p_value:.3g}"
                 if result["significant"]:
                     p_text += "  •  significant"
 
@@ -372,8 +397,8 @@ def create_responder_boxplot(
             figure.text(
                 0.5,
                 0.03,
-                "Boxes show median and IQR; diamonds show means; "
-                "points represent samples.",
+                "Each point is one subject's mean across days 0, 7, and 14. "
+                "Diamonds show group means.",
                 ha="center",
                 fontsize=9,
                 color="#52616B",
