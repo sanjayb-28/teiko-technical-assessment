@@ -4,6 +4,8 @@ Analysis of immune-cell population data using Python, SQLite, and an interactive
 
 ## Setup
 
+Python 3.10 or newer is required.
+
 ```bash
 python -m pip install -r requirements.txt
 ```
@@ -60,6 +62,21 @@ The analysis creates:
 CD4 T cells show a significant difference between responders and non-responders (raw `p = 0.0045`, adjusted `p = 0.0226`). The other four populations do not meet the adjusted `p < 0.05` threshold.
 
 The results table includes subject counts, mean percentages, mean differences, test statistics, raw and adjusted p-values, and significance. The analysis identifies associations with response; it does not train or validate a predictive model.
+
+## Data subset analysis
+
+Run the Part 4 analysis after creating the database:
+
+```bash
+python subset_analysis.py
+```
+
+The command creates:
+
+- `outputs/baseline_samples.csv`, containing the 656 melanoma PBMC samples collected at day 0 from subjects treated with miraclib
+- `outputs/subset_summary.csv`, containing sample counts by project, distinct subject counts by response and sex, and the requested average B-cell count
+
+The baseline subset contains 384 samples from `prj1` and 272 from `prj3`. It includes 331 responders and 325 non-responders, with 312 female and 344 male subjects. For melanoma male responders at day 0 across all sample and treatment types, the average B-cell count is `10206.15`.
 
 ## Development tools
 
