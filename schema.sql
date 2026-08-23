@@ -56,4 +56,3 @@ CREATE INDEX idx_samples_subject
 
 CREATE INDEX idx_cell_counts_population
     ON cell_counts (population_id);
-
