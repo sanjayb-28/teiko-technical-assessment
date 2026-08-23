@@ -2,6 +2,12 @@
 
 Analysis of immune-cell population data using Python, SQLite, and an interactive Streamlit dashboard.
 
+## Setup
+
+```bash
+python -m pip install -r requirements.txt
+```
+
 ## Data management
 
 Run the loader from the repository root:
@@ -41,6 +47,19 @@ python analysis.py
 ```
 
 The command writes `outputs/cell_frequencies.csv`. Each sample has five rows with the required `sample`, `total_count`, `population`, `count`, and `percentage` columns. Percentages are calculated as the population count divided by the sample's total cell count, multiplied by 100.
+
+## Statistical analysis
+
+`python analysis.py` also compares relative frequencies for melanoma PBMC samples from miraclib-treated responders and non-responders. Each subject's percentages are averaged across days 0, 7, and 14 before running a two-sided Welch t-test for each population. Benjamini–Hochberg correction controls the false discovery rate across the five tests, with significance defined as adjusted `p < 0.05`.
+
+The analysis creates:
+
+- `outputs/statistical_results.csv`
+- `outputs/responder_boxplots.png`
+
+CD4 T cells show a significant difference between responders and non-responders (raw `p = 0.0045`, adjusted `p = 0.0226`). The other four populations do not meet the adjusted `p < 0.05` threshold.
+
+The results table includes subject counts, mean percentages, mean differences, test statistics, raw and adjusted p-values, and significance. The analysis identifies associations with response; it does not train or validate a predictive model.
 
 ## Development tools
 
