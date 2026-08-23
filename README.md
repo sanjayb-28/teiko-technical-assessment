@@ -32,6 +32,16 @@ Keeping cell measurements in a long-form table allows new populations to be adde
 python -m unittest discover -s tests
 ```
 
+## Data overview
+
+After creating the database, generate the cell-frequency summary:
+
+```bash
+python analysis.py
+```
+
+The command writes `outputs/cell_frequencies.csv`. Each sample has five rows with the required `sample`, `total_count`, `population`, `count`, and `percentage` columns. Percentages are calculated as the population count divided by the sample's total cell count, multiplied by 100.
+
 ## Development tools
 
 Visual Studio Code is the primary IDE.

@@ -56,3 +56,20 @@ CREATE INDEX idx_samples_subject
 
 CREATE INDEX idx_cell_counts_population
     ON cell_counts (population_id);
+
+CREATE VIEW sample_cell_frequencies AS
+WITH sample_totals AS (
+    SELECT sample_id, SUM(count) AS total_count
+    FROM cell_counts
+    GROUP BY sample_id
+)
+SELECT
+    samples.sample_name AS sample,
+    sample_totals.total_count,
+    cell_populations.population_name AS population,
+    cell_counts.count,
+    100.0 * cell_counts.count / NULLIF(sample_totals.total_count, 0) AS percentage
+FROM cell_counts
+JOIN sample_totals USING (sample_id)
+JOIN samples USING (sample_id)
+JOIN cell_populations USING (population_id);
