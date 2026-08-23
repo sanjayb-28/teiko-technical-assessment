@@ -1,11 +1,18 @@
 import csv
 import hashlib
+import struct
 import tempfile
 import unittest
 from collections import defaultdict
 from pathlib import Path
 
-from analysis import OUTPUT_COLUMNS, export_cell_frequencies
+from analysis import (
+    OUTPUT_COLUMNS,
+    STATISTICS_COLUMNS,
+    export_cell_frequencies,
+    load_responder_frequencies,
+    run_responder_analysis,
+)
 from load_data import CSV_PATH, POPULATIONS, SCHEMA_PATH, create_database
 
 
@@ -97,6 +104,72 @@ class FrequencyExportTests(unittest.TestCase):
 
         with self.assertRaisesRegex(FileNotFoundError, "Run python load_data.py first"):
             export_cell_frequencies(missing_database, self.output_path)
+
+
+class ResponderAnalysisTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.temporary_directory = tempfile.TemporaryDirectory()
+        temporary_path = Path(self.temporary_directory.name)
+        self.database_path = temporary_path / "test.db"
+        self.statistics_path = temporary_path / "statistical_results.csv"
+        self.boxplot_path = temporary_path / "responder_boxplots.png"
+        create_database(CSV_PATH, self.database_path, SCHEMA_PATH)
+
+    def tearDown(self) -> None:
+        self.temporary_directory.cleanup()
+
+    def test_uses_required_sample_subset(self) -> None:
+        frequencies = load_responder_frequencies(self.database_path)
+
+        self.assertEqual(set(frequencies), set(POPULATIONS))
+        for population in POPULATIONS:
+            self.assertEqual(len(frequencies[population]["yes"]), 993)
+            self.assertEqual(len(frequencies[population]["no"]), 975)
+
+    def test_writes_statistics_and_boxplots(self) -> None:
+        results = run_responder_analysis(
+            self.database_path,
+            self.statistics_path,
+            self.boxplot_path,
+        )
+
+        with self.statistics_path.open(newline="", encoding="utf-8") as output_file:
+            reader = csv.DictReader(output_file)
+            rows = list(reader)
+
+        self.assertEqual(tuple(reader.fieldnames or ()), STATISTICS_COLUMNS)
+        self.assertEqual([row["population"] for row in rows], list(POPULATIONS))
+        self.assertEqual(len(results), 5)
+        self.assertEqual(
+            {row["population"] for row in rows if row["significant"] == "yes"},
+            {"cd4_t_cell"},
+        )
+        self.assertTrue(all(row["responder_n"] == "993" for row in rows))
+        self.assertTrue(all(row["non_responder_n"] == "975" for row in rows))
+
+        image = self.boxplot_path.read_bytes()
+        self.assertEqual(image[:8], b"\x89PNG\r\n\x1a\n")
+        width, height = struct.unpack(">II", image[16:24])
+        self.assertGreaterEqual(width, 3_000)
+        self.assertGreaterEqual(height, 1_000)
+        self.assertGreater(len(image), 100_000)
+
+    def test_statistics_output_is_deterministic(self) -> None:
+        run_responder_analysis(
+            self.database_path,
+            self.statistics_path,
+            self.boxplot_path,
+        )
+        first_digest = hashlib.sha256(self.statistics_path.read_bytes()).hexdigest()
+
+        run_responder_analysis(
+            self.database_path,
+            self.statistics_path,
+            self.boxplot_path,
+        )
+        second_digest = hashlib.sha256(self.statistics_path.read_bytes()).hexdigest()
+
+        self.assertEqual(first_digest, second_digest)
 
 
 if __name__ == "__main__":
