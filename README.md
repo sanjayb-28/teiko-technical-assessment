@@ -82,6 +82,8 @@ make test
 
 The tests verify source loading, database integrity, deterministic outputs, analysis criteria, statistical results, subset calculations, and dashboard rendering.
 
+GitHub Actions runs the setup, pipeline, and test commands for every push and pull request.
+
 ## Development tools
 
 Visual Studio Code was the primary IDE.
