@@ -3,29 +3,20 @@
 from __future__ import annotations
 
 import csv
-import io
 import sqlite3
-from collections import defaultdict
 from contextlib import closing
 
-import numpy as np
 import plotly.graph_objects as go
 import streamlit as st
 from plotly.subplots import make_subplots
 
+from analysis import POPULATION_LABELS
+from analysis import load_responder_frequencies as query_responder_frequencies
 from load_data import DATABASE_PATH, POPULATIONS, ROOT
 
 STATISTICS_PATH = ROOT / "outputs" / "statistical_results.csv"
 BASELINE_PATH = ROOT / "outputs" / "baseline_samples.csv"
 SUMMARY_PATH = ROOT / "outputs" / "subset_summary.csv"
-
-POPULATION_LABELS = {
-    "b_cell": "B cell",
-    "cd8_t_cell": "CD8 T cell",
-    "cd4_t_cell": "CD4 T cell",
-    "nk_cell": "NK cell",
-    "monocyte": "Monocyte",
-}
 
 POPULATION_COLORS = {
     "b_cell": "#234E70",
@@ -50,24 +41,6 @@ RESPONSE_STYLES = {
     },
 }
 
-RESPONDER_QUERY = """
-    SELECT
-        projects.project_name,
-        subjects.subject_name,
-        frequencies.population,
-        subjects.response,
-        frequencies.percentage
-    FROM sample_cell_frequencies AS frequencies
-    JOIN samples ON samples.sample_name = frequencies.sample
-    JOIN subjects USING (subject_id)
-    JOIN projects USING (project_id)
-    WHERE subjects.condition = 'melanoma'
-      AND subjects.treatment = 'miraclib'
-      AND samples.sample_type = 'PBMC'
-      AND subjects.response IN ('yes', 'no')
-    ORDER BY frequencies.population, subjects.response, samples.sample_name
-"""
-
 
 def require_artifacts() -> None:
     required_paths = (DATABASE_PATH, STATISTICS_PATH, BASELINE_PATH, SUMMARY_PATH)
@@ -76,23 +49,6 @@ def require_artifacts() -> None:
         names = ", ".join(str(path) for path in missing)
         st.error(f"Missing required outputs: {names}. Run `make pipeline` first.")
         st.stop()
-
-
-@st.cache_data(show_spinner=False)
-def load_overview() -> dict[str, int]:
-    with closing(sqlite3.connect(DATABASE_PATH)) as connection:
-        return {
-            "projects": connection.execute("SELECT COUNT(*) FROM projects").fetchone()[
-                0
-            ],
-            "subjects": connection.execute("SELECT COUNT(*) FROM subjects").fetchone()[
-                0
-            ],
-            "samples": connection.execute("SELECT COUNT(*) FROM samples").fetchone()[0],
-            "populations": connection.execute(
-                "SELECT COUNT(*) FROM cell_populations"
-            ).fetchone()[0],
-        }
 
 
 @st.cache_data(show_spinner=False)
@@ -137,21 +93,7 @@ def load_sample_frequencies(sample: str) -> list[dict[str, object]]:
 
 @st.cache_data(show_spinner=False)
 def load_responder_frequencies() -> dict[str, dict[str, list[float]]]:
-    subject_measurements: dict[tuple[str, str, str, str], list[float]] = defaultdict(
-        list
-    )
-    with closing(sqlite3.connect(DATABASE_PATH)) as connection:
-        for project, subject, population, response, percentage in connection.execute(
-            RESPONDER_QUERY
-        ):
-            subject_measurements[(population, response, project, subject)].append(
-                float(percentage)
-            )
-
-    frequencies = {population: {"no": [], "yes": []} for population in POPULATIONS}
-    for (population, response, _, _), percentages in subject_measurements.items():
-        frequencies[population][response].append(float(np.mean(percentages)))
-    return frequencies
+    return query_responder_frequencies(DATABASE_PATH)
 
 
 @st.cache_data(show_spinner=False)
@@ -390,16 +332,6 @@ def format_statistics_table(
     ]
 
 
-def rows_to_csv(rows: list[dict[str, str]]) -> str:
-    if not rows:
-        return ""
-    output = io.StringIO(newline="")
-    writer = csv.DictWriter(output, fieldnames=rows[0], lineterminator="\n")
-    writer.writeheader()
-    writer.writerows(rows)
-    return output.getvalue()
-
-
 def apply_styles() -> None:
     st.markdown(
         """
@@ -423,45 +355,36 @@ def apply_styles() -> None:
 
 def render_header() -> None:
     st.markdown(
-        '<div class="section-kicker">Loblaw Bio Clinical Analytics</div>',
+        '<div class="hero-title">Immune cell analysis</div>',
         unsafe_allow_html=True,
     )
     st.markdown(
-        '<div class="hero-title">Immune cell response analysis</div>',
-        unsafe_allow_html=True,
-    )
-    st.markdown(
-        '<div class="hero-copy">Explore immune-cell composition, compare miraclib responders with non-responders, and review the verified baseline cohort.</div>',
+        '<div class="hero-copy">Review per-sample cell frequencies, compare miraclib responders with non-responders, and examine the requested baseline subset.</div>',
         unsafe_allow_html=True,
     )
 
 
 def render_dashboard() -> None:
     require_artifacts()
-    overview = load_overview()
     statistics = load_statistics()
     frequencies = load_responder_frequencies()
     summary = load_subset_summary()
     baseline_samples = load_baseline_samples()
 
     render_header()
-    metric_columns = st.columns(4)
-    metric_columns[0].metric("Samples", f"{overview['samples']:,}")
-    metric_columns[1].metric("Subjects", f"{overview['subjects']:,}")
-    metric_columns[2].metric("Projects", f"{overview['projects']:,}")
-    metric_columns[3].metric("Cell populations", f"{overview['populations']:,}")
-
     cd4 = next(row for row in statistics if row["population"] == "cd4_t_cell")
     st.markdown(
-        "<div class='finding'><strong>Verified finding:</strong> CD4 T-cell relative frequency is higher in responders by "
+        "<div class='finding'><strong>Result:</strong> In this dataset, the mean CD4 T-cell "
+        "relative frequency was "
         f"{float(cd4['mean_difference']):.2f} percentage points "
+        "higher for responders than non-responders "
         f"(adjusted p = {float(cd4['adjusted_p_value']):.4f}). "
-        "This is an association across treatment timepoints, not a validated predictive model.</div>",
+        "This is an association, not a validated predictive model.</div>",
         unsafe_allow_html=True,
     )
 
     st.markdown(
-        '<div class="section-kicker">Treatment response</div>',
+        '<div class="section-kicker">Statistical analysis</div>',
         unsafe_allow_html=True,
     )
     st.header("Responder comparison")
@@ -481,11 +404,11 @@ def render_dashboard() -> None:
         )
 
     st.markdown(
-        '<div class="section-kicker">Cell composition</div>',
+        '<div class="section-kicker">Data overview</div>',
         unsafe_allow_html=True,
     )
     st.header("Sample frequency explorer")
-    st.caption("Choose any sample to inspect its five immune-cell populations.")
+    st.caption("Select a sample to view its five immune-cell populations.")
     selected_sample = st.selectbox("Sample", load_sample_names(), index=0)
     sample_rows = load_sample_frequencies(selected_sample)
     chart_column, table_column = st.columns((1.7, 1))
@@ -511,7 +434,7 @@ def render_dashboard() -> None:
         )
 
     st.markdown(
-        '<div class="section-kicker">Early treatment subset</div>',
+        '<div class="section-kicker">Data subset analysis</div>',
         unsafe_allow_html=True,
     )
     st.header("Baseline melanoma cohort")
@@ -536,7 +459,7 @@ def render_dashboard() -> None:
         config={"displayModeBar": False, "responsive": True},
     )
 
-    with st.expander("Browse baseline samples"):
+    with st.expander("View baseline samples"):
         filter_columns = st.columns(3)
         with filter_columns[0]:
             project = st.selectbox("Project", ["All", "prj1", "prj3"])
@@ -553,24 +476,18 @@ def render_dashboard() -> None:
         ]
         st.caption(f"{len(filtered):,} matching samples")
         st.dataframe(filtered, hide_index=True, width="stretch", height=320)
-        st.download_button(
-            "Download filtered CSV",
-            rows_to_csv(filtered),
-            file_name="baseline_samples_filtered.csv",
-            mime="text/csv",
-        )
 
     st.markdown(
         "<div class='source-note'><strong>Source:</strong> cell-count.csv loaded into SQLite. "
-        "Canonical outputs are regenerated with <code>make pipeline</code>. Statistical significance uses "
-        "two-sided Welch tests with Benjamini–Hochberg correction across five populations.</div>",
+        "Statistical significance uses two-sided Welch tests with Benjamini–Hochberg correction "
+        "across five populations.</div>",
         unsafe_allow_html=True,
     )
 
 
 def main() -> None:
     st.set_page_config(
-        page_title="Immune Cell Response Analysis",
+        page_title="Immune Cell Analysis",
         page_icon="🧬",
         layout="wide",
         initial_sidebar_state="collapsed",

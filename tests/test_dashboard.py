@@ -1,4 +1,3 @@
-import csv
 import unittest
 from pathlib import Path
 
@@ -9,27 +8,14 @@ from dashboard import (
     create_responder_figure,
     create_sample_figure,
     load_baseline_samples,
-    load_overview,
     load_responder_frequencies,
     load_sample_frequencies,
     load_statistics,
     load_subset_summary,
-    rows_to_csv,
 )
 
 
 class DashboardDataTests(unittest.TestCase):
-    def test_overview_matches_loaded_database(self) -> None:
-        self.assertEqual(
-            load_overview(),
-            {
-                "projects": 3,
-                "subjects": 3_500,
-                "samples": 10_500,
-                "populations": 5,
-            },
-        )
-
     def test_sample_explorer_uses_all_five_populations(self) -> None:
         rows = load_sample_frequencies("sample00000")
 
@@ -62,15 +48,13 @@ class DashboardDataTests(unittest.TestCase):
             self.assertEqual(len(population["yes"]), 331)
             self.assertEqual(len(population["no"]), 325)
 
-    def test_baseline_figure_and_download_use_pipeline_outputs(self) -> None:
+    def test_baseline_figure_uses_pipeline_outputs(self) -> None:
         baseline_samples = load_baseline_samples()
         summary = load_subset_summary()
         figure = create_baseline_figure(summary)
 
         self.assertEqual(len(baseline_samples), 656)
         self.assertEqual(len(figure.data), 3)
-        exported = rows_to_csv(baseline_samples[:2])
-        self.assertEqual(len(list(csv.DictReader(exported.splitlines()))), 2)
 
 
 class DashboardAppTests(unittest.TestCase):
@@ -79,7 +63,7 @@ class DashboardAppTests(unittest.TestCase):
         app = AppTest.from_file(dashboard_path, default_timeout=20).run()
 
         self.assertEqual(app.exception, [])
-        self.assertEqual(len(app.metric), 9)
+        self.assertEqual(len(app.metric), 5)
         self.assertEqual(app.selectbox[0].value, "sample00000")
         self.assertIn("Responder comparison", [header.value for header in app.header])
 
